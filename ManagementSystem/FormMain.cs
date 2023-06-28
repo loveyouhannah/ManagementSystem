@@ -1,5 +1,7 @@
 using System.Windows.Forms;
 using System.IO;
+using OfficeOpenXml;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Excel = Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.Excel;
@@ -76,194 +78,71 @@ namespace ManagementSystem
         private void btnExport_Click(object sender, EventArgs e)
         {
             SplitExcelFile(filePath, columnName);
-
-            /*Microsoft.Office.Interop.Excel.Application excelApp = null;
-            Workbook workbook = null;
-            Worksheet worksheet = null;
-
-            try
-            {
-                excelApp = new Microsoft.Office.Interop.Excel.Application();
-                workbook = excelApp.Workbooks.Open(tbSelectFile.Text);//@"C:\Users\Hannah\Desktop\testets.xlsx");
-                worksheet = workbook.Worksheets.get_Item(1) as Worksheet;
-
-                //방법 1 : Range 범위 지정
-                //Microsoft.Office.Interop.Excel.Range range = worksheet.Range["B2", "K25"];
-                //object[,] data = new object[25, 11];
-                //range.Value = data;
-
-                //방법 2 : Cell 개별 지정(1)
-                //Range cell1 = worksheet.Cells[4, 4];
-                //cell1.Value = "JOB NO";
-                //Range cell2 = worksheet.Cells[5, 4];
-                //cell2.Value = "LOT NO";
-
-                //방법 3 : Cell 개별 지정(2)
-                //((Range)worksheet.Cells[4, 4]).Value = "ZR1";
-                //((Range)worksheet.Cells[5, 4]).Value = "ZR2";
-
-                object[,] data1 = new object[,] { { "JOB NO" }, { "LOT NO" }, { "" }, { "UNIT NO" } };
-
-                object[,] data2 = new object[,]{ { 0, 10, 12, 3, 4, 5},
-                                                                { 1, 10, 12, 3, 4, 5},
-                                                                { 2, 10, 12, 3, 4, 5},
-                                                                { 3, 10, 12, 3, 4, 5},
-                                                                { 4, 10, 12, 3, 4, 5},
-                                                                { 5, 10, 12, 3, 4, 5},
-                                                                { 6, 10, 12, 3, 4, 5},
-                                                                { 7, 10, 12, 3, 4, 5} };
-
-                Microsoft.Office.Interop.Excel.Range range = worksheet.Range["D4", "D7"];
-                Microsoft.Office.Interop.Excel.Range range2 = worksheet.Range["E17", "J24"];
-
-                range.Value = data1;
-                range2.Value = data2;
-
-                workbook.Save();
-
-                workbook.Close();
-                excelApp.Quit();
-
-            }
-            catch (Exception ex)
-            {
-                //  throw ex; //throw는 명시적으로 예외를 발생시킬 때 = 예외를 강제로 발 생시켜야하는 경우
-                //throw하게되면 정상적인 프로그램 실행을 즉시 중단하고 가장 가까운 예외 처리기로 넘어간다.
-                MessageBox.Show(ex.Message);
-            }
-            finally
-            {
-                ReleaseExcelObject(worksheet);
-                ReleaseExcelObject(workbook);
-                ReleaseExcelObject(excelApp);
-
-                MessageBox.Show("Saved!");
-            }*/
         }
 
-
-        public void SplitExcelFile(string sourceFilePath, string colName)
+        public static void SplitExcelFile(string sourceFilePath, string colName)
         {
-            // 엑셀 애플리케이션 생성
-            Excel.Application excelApp = new Excel.Application();
-
-            try
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            using (ExcelPackage excelPackage = new ExcelPackage(new FileInfo(sourceFilePath)))
             {
-                // 원본 엑셀 파일 열기
-                Workbook sourceWorkbook = excelApp.Workbooks.Open(sourceFilePath);
-                Worksheet sourceWorksheet = sourceWorkbook.Worksheets.get_Item(1) as Worksheet;
-                Excel.Range sourceRange = sourceWorksheet.UsedRange;
+                ExcelWorksheet worksheet = excelPackage.Workbook.Worksheets[0];
+                int rowCount = worksheet.Dimension.Rows;
 
-                // 특정 열의 데이터를 읽기 위한 열 인덱스 가져오기
-                Excel.Range headerRow = (Excel.Range)sourceWorksheet.Rows[1];
-                int columnIndex = GetColumnIndex(headerRow, colName);
+                // 열 인덱스 찾기
+                int columnIndex = -1;
+                for (int col = 1; col <= worksheet.Dimension.Columns; col++)
+                {
+                    if (worksheet.Cells[1, col].Value?.ToString() == colName)
+                    {
+                        columnIndex = col;
+                        break;
+                    }
+                }
 
                 if (columnIndex == -1)
                 {
-                    // 주어진 열 이름을 찾을 수 없음
-                    MessageBox.Show($"열 '{colName}'를 찾을 수 없습니다.");
+                    // 지정된 열이 존재하지 않는 경우
+                    MessageBox.Show($"열 {colName}이 존재하지 않습니다. 파일을 재확인해주세요.");
                     return;
                 }
 
-                // 특정 열의 데이터 값으로 그룹화
-                Dictionary<string, List<Excel.Range>> groups = new Dictionary<string, List<Excel.Range>>();
 
-                for (int row = 2; row <= sourceRange.Rows.Count; row++)
+                //colName의 이름을 가진 열의 데이터들을 분할하여 Dictionary 저장
+                Dictionary<string, List<ExcelRange>> groups = new Dictionary<string, List<ExcelRange>>();
+                for (int row = 2; row <= rowCount; row++)
                 {
-                    string value = ((Excel.Range)sourceRange.Cells[row, columnIndex]).Value?.ToString();
-
+                    string value = worksheet.Cells[row, columnIndex].Value?.ToString();
                     if (!string.IsNullOrEmpty(value))
                     {
                         if (!groups.ContainsKey(value))
                         {
-                            groups[value] = new List<Excel.Range>();
+                            groups[value] = new List<ExcelRange>();
                         }
-
-                        //dictionary에 저장되어 있는 Key값(= value = 판매자 코드 명)에 따라 해당 행을 추가
-                        groups[value].Add((Excel.Range)sourceRange.Rows[row]);
+                        groups[value].Add(worksheet.Cells[row, columnIndex]);
                     }
                 }
 
-                // 새로운 엑셀 파일로 데이터 복사
+                //분할된 파일 생성
                 string formattedDateTime = string.Empty;
-                foreach (var group in groups)
+                foreach (var kvp in groups)
                 {
-                    Excel.Workbook newWorkbook = excelApp.Workbooks.Add();
-                    Excel.Worksheet newWorksheet = (Excel.Worksheet)newWorkbook.Worksheets[1];
+                    string groupName = kvp.Key;
+                    List<ExcelRange> ranges = kvp.Value;
 
-                    int newRow = 1;
-                    foreach (Excel.Range row in group.Value)
+                    ExcelPackage newExcelPackage = new ExcelPackage();
+                    ExcelWorksheet newWorksheet = newExcelPackage.Workbook.Worksheets.Add(groupName);
+
+                    foreach (var range in ranges)
                     {
-                        Excel.Range newRowRange = (Excel.Range)newWorksheet.Rows[newRow];
-                        row.Copy(newRowRange);
-                        newRow++;
+                        newWorksheet.Cells[range.Start.Row, range.Start.Column].Value = range.Value;
                     }
 
-                    // 새로운 엑셀 파일 저장
                     DateTime now = DateTime.Now;
                     formattedDateTime = now.ToString("yyMMdd_HHmm");
 
-                    string newFilePath = Path.Combine(Path.GetDirectoryName(newPath), $"{group.Key}_{formattedDateTime}.xlsx");
-                    newWorkbook.SaveAs(newFilePath);
-                    newWorkbook.Close();
+                    string newFilePath = Path.Combine(Path.GetDirectoryName(sourceFilePath), $"{groupName}_{formattedDateTime}.xlsx");
+                    newExcelPackage.SaveAs(new FileInfo(newFilePath));
                 }
-
-                // 원본 엑셀 파일 닫기
-                sourceWorkbook.Close();
-            }
-            catch (Exception ex)
-            {
-                // 예외 처리
-                // 적절한 예외 처리를 수행하거나 오류 메시지를 표시하세요.
-                Console.WriteLine("Error: " + ex.Message);
-            }
-            finally
-            {
-                // 엑셀 애플리케이션 종료
-                excelApp.Quit();
-            }
-        }
-
-        // 열 이름에 해당하는 열 인덱스 가져오기
-        private int GetColumnIndex(Excel.Range headerRow, string columnName)
-        {
-            int columnIndex = -1;
-
-            for (int column = 1; column <= headerRow.Columns.Count; column++)
-            {
-                string headerValue = ((Excel.Range)headerRow.Cells[1, column]).Value?.ToString();
-
-                if (headerValue == columnName)
-                {
-                    columnIndex = column;
-                    break;
-                }
-            }
-
-            return columnIndex;
-        }
-
-
-        private void ReleaseExcelObject(object obj)
-        {
-            try
-            {
-                if (obj != null)
-                {
-                    // 지정된 COM 개체와 연결된 지정된 RCW(RCW)의 참조 횟수를 감소시킵니다.
-                    // obj : 해제할 COM 개체입니다.
-                    Marshal.ReleaseComObject(obj);
-                    obj = null;
-                }
-            }
-            catch (Exception ex)
-            {
-                obj = null;
-                throw ex;
-            }
-            finally
-            {
-                GC.Collect();
             }
         }
     }
