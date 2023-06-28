@@ -30,16 +30,15 @@
         {
             btnExport = new Button();
             dataGridView = new DataGridView();
-            colNo = new DataGridViewTextBoxColumn();
-            colName = new DataGridViewTextBoxColumn();
-            colCode = new DataGridViewTextBoxColumn();
-            colUse = new DataGridViewCheckBoxColumn();
             tbSelectFile = new TextBox();
             tbLocation = new TextBox();
             btnSelectFile = new Button();
             btnLocation = new Button();
             openFileDialog = new OpenFileDialog();
             folderBrowserDialog = new FolderBrowserDialog();
+            colNo = new DataGridViewTextBoxColumn();
+            colName = new DataGridViewTextBoxColumn();
+            colCode = new DataGridViewTextBoxColumn();
             ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
             SuspendLayout();
             // 
@@ -62,7 +61,7 @@
             dataGridView.AllowUserToAddRows = false;
             dataGridView.BorderStyle = BorderStyle.None;
             dataGridView.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView.Columns.AddRange(new DataGridViewColumn[] { colNo, colName, colCode, colUse });
+            dataGridView.Columns.AddRange(new DataGridViewColumn[] { colNo, colName, colCode });
             dataGridView.Location = new Point(17, 140);
             dataGridView.Margin = new Padding(4, 5, 4, 5);
             dataGridView.Name = "dataGridView";
@@ -71,43 +70,6 @@
             dataGridView.RowTemplate.Height = 25;
             dataGridView.Size = new Size(718, 612);
             dataGridView.TabIndex = 1;
-            // 
-            // colNo
-            // 
-            colNo.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            colNo.FillWeight = 18.181818F;
-            colNo.HeaderText = "No";
-            colNo.MinimumWidth = 40;
-            colNo.Name = "colNo";
-            colNo.ReadOnly = true;
-            colNo.Resizable = DataGridViewTriState.False;
-            colNo.Width = 80;
-            // 
-            // colName
-            // 
-            colName.FillWeight = 140.909088F;
-            colName.HeaderText = "Name";
-            colName.MinimumWidth = 8;
-            colName.Name = "colName";
-            colName.Width = 200;
-            // 
-            // colCode
-            // 
-            colCode.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            colCode.FillWeight = 140.909088F;
-            colCode.HeaderText = "Code";
-            colCode.MinimumWidth = 8;
-            colCode.Name = "colCode";
-            // 
-            // colUse
-            // 
-            colUse.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            colUse.HeaderText = "Use";
-            colUse.MinimumWidth = 40;
-            colUse.Name = "colUse";
-            colUse.Resizable = DataGridViewTriState.False;
-            colUse.SortMode = DataGridViewColumnSortMode.Automatic;
-            colUse.Width = 80;
             // 
             // tbSelectFile
             // 
@@ -149,6 +111,33 @@
             // 
             openFileDialog.FileName = "openFileDialog";
             // 
+            // colNo
+            // 
+            colNo.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            colNo.FillWeight = 18.181818F;
+            colNo.HeaderText = "No";
+            colNo.MinimumWidth = 40;
+            colNo.Name = "colNo";
+            colNo.ReadOnly = true;
+            colNo.Resizable = DataGridViewTriState.False;
+            colNo.Width = 80;
+            // 
+            // colName
+            // 
+            colName.FillWeight = 140.909088F;
+            colName.HeaderText = "Name";
+            colName.MinimumWidth = 8;
+            colName.Name = "colName";
+            colName.Width = 200;
+            // 
+            // colCode
+            // 
+            colCode.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            colCode.FillWeight = 140.909088F;
+            colCode.HeaderText = "Code";
+            colCode.MinimumWidth = 8;
+            colCode.Name = "colCode";
+            // 
             // FormMain
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
@@ -173,15 +162,14 @@
 
         private Button btnExport;
         private DataGridView dataGridView;
-        private DataGridViewTextBoxColumn colNo;
-        private DataGridViewTextBoxColumn colName;
-        private DataGridViewTextBoxColumn colCode;
-        private DataGridViewCheckBoxColumn colUse;
         private TextBox tbSelectFile;
         private TextBox tbLocation;
         private Button btnSelectFile;
         private Button btnLocation;
         private OpenFileDialog openFileDialog;
         private FolderBrowserDialog folderBrowserDialog;
+        private DataGridViewTextBoxColumn colNo;
+        private DataGridViewTextBoxColumn colName;
+        private DataGridViewTextBoxColumn colCode;
     }
 }
