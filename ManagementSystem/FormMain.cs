@@ -6,12 +6,17 @@ using System.Runtime.InteropServices;
 using Excel = Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.Excel;
 using System.Xml;
+using System.Text;
 
 namespace ManagementSystem
 {
     public partial class FormMain : Form
     {
+        //기준열의 이름
         const string columnName = "판매자상품코드";
+        //판매자 상품 코드들을 저장하는 .txt파일 위치
+        const string pathCode = @"C:\Users\Hannah\Desktop\Test.txt";
+
         string filePath = string.Empty;
         string newPath = string.Empty;
 
@@ -20,37 +25,31 @@ namespace ManagementSystem
             InitializeComponent();
         }
 
+        #region 판매자 관리 코드 불러오기
         private void FormMain_Load(object sender, EventArgs e)
         {
-            //[최종] 저장된 고객사별 code들 dataGridView에 불러오기
-            //text로 불러오기. >> QQQ. 고객사가 수백개가 되기도 하나..?
-
-            //일단은 수동입력으로 DataGridView add
             dataGridView.Rows.Clear();
 
-            //for (int i = 0; i < -.Count; i++)
-            //{
-            dataGridView.Rows.Add();
-            dataGridView.Rows[0].Cells[colNo.Index].Value = 1;
-            dataGridView.Rows[0].Cells[colName.Index].Value = "XR";
-            dataGridView.Rows[0].Cells[colCode.Index].Value = "xrxr";
-
-            dataGridView.Rows.Add();
-            dataGridView.Rows[1].Cells[colNo.Index].Value = 2;
-            dataGridView.Rows[1].Cells[colName.Index].Value = "ABC";
-            dataGridView.Rows[1].Cells[colCode.Index].Value = "ABAB";
-
-            dataGridView.Rows.Add();
-            dataGridView.Rows[2].Cells[colNo.Index].Value = 3;
-            dataGridView.Rows[2].Cells[colName.Index].Value = "GARDEN";
-            dataGridView.Rows[2].Cells[colCode.Index].Value = "GD";
-            //    dataGridView.Rows[i].Cells[dgvClassNo.Index].Value = i + 1;
-            ////}
+            LoadDataFromTxtToDataGridView(pathCode);
+            AddRowNumbers();
         }
 
+        /// <summary> .txt파일에서 판매자상품코드 정보들을 불러와 DataGridView에 뿌린다. </summary>
+        /// <param name="filePath"> .txt파일이 저장된 경로 </param>
+        private void LoadDataFromTxtToDataGridView(string filePath)
+        {
+            // .txt 파일에서 데이터 읽어오기
+            string[] lines = File.ReadAllLines(filePath);
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string[] values = lines[i].Split('\t'); // 탭 구분자 사용
+                dataGridView.Rows.Add(values);
+            }
+        }
+        #endregion
+
         /// <summary> Whole Data담은 엑셀 파일 주소 불러오기 </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
         private void btnSelectFile_Click(object sender, EventArgs e)
         {
             if (openFileDialog.ShowDialog() == DialogResult.OK)
@@ -61,8 +60,6 @@ namespace ManagementSystem
         }
 
         /// <summary> 고객사별 파일 추출하여 저장할 폴더 지정하기 </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
         private void btnLocation_Click(object sender, EventArgs e)
         {
             if (folderBrowserDialog.ShowDialog() == DialogResult.OK)
@@ -73,77 +70,234 @@ namespace ManagementSystem
         }
 
         /// <summary> tbSelectFile에서 지정한 통합 파일을 판매자 상품코드 별로 파일 분할 </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
         private void btnExport_Click(object sender, EventArgs e)
         {
             SplitExcelFile(filePath, columnName);
         }
 
-        public static void SplitExcelFile(string sourceFilePath, string colName)
+        public void SplitExcelFile(string sourceFilePath, string colName)
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-            using (ExcelPackage excelPackage = new ExcelPackage(new FileInfo(sourceFilePath)))
+            using (var package = new ExcelPackage(new FileInfo(sourceFilePath)))
             {
-                ExcelWorksheet worksheet = excelPackage.Workbook.Worksheets[0];
-                int rowCount = worksheet.Dimension.Rows;
+                ExcelWorksheet worksheet = package.Workbook.Worksheets[0]; //0 : 1부터라고는 매뉴얼에 되어있지만, 왜인지 0으로 읽힘
+                string formattedDateTime = string.Empty;
 
-                // 열 인덱스 찾기
+                // 열 이름으로 열 인덱스 찾기
                 int columnIndex = -1;
                 for (int col = 1; col <= worksheet.Dimension.Columns; col++)
                 {
-                    if (worksheet.Cells[1, col].Value?.ToString() == colName)
+                    string columnName = worksheet.Cells[1, col].Value?.ToString();
+                    if (columnName == colName)
                     {
                         columnIndex = col;
                         break;
                     }
                 }
 
-                if (columnIndex == -1)
-                {
-                    // 지정된 열이 존재하지 않는 경우
-                    MessageBox.Show($"열 {colName}이 존재하지 않습니다. 파일을 재확인해주세요.");
-                    return;
-                }
+                //해당 열의 값 distinct하여 list(columnValues)에 저장
+                var columnValues = GetColumnValues(worksheet, columnIndex, colName);
 
-
-                //colName의 이름을 가진 열의 데이터들을 분할하여 Dictionary 저장
-                Dictionary<string, List<ExcelRange>> groups = new Dictionary<string, List<ExcelRange>>();
-                for (int row = 2; row <= rowCount; row++)
+                //distinct한 data들을 기준으로 행을 읽고 Copy & New File 생성
+                foreach (var value in columnValues)
                 {
-                    string value = worksheet.Cells[row, columnIndex].Value?.ToString();
-                    if (!string.IsNullOrEmpty(value))
+                    var rows = GetRowsByColumnValue(worksheet, columnIndex, value);
+
+                    if (rows.Count > 0)
                     {
-                        if (!groups.ContainsKey(value))
+                        var newPackage = new ExcelPackage();
+                        var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
+
+                        foreach (var row in rows)
                         {
-                            groups[value] = new List<ExcelRange>();
+                            CopyRow(worksheet, newWorksheet, row);
                         }
-                        groups[value].Add(worksheet.Cells[row, columnIndex]);
+
+                        //파일 저장
+                        DateTime now = DateTime.Now;
+                        formattedDateTime = now.ToString("yyMMdd_HHmm");
+
+                        string newFilePath = Path.Combine(Path.GetDirectoryName(sourceFilePath), $"{value}_{formattedDateTime}.xlsx");
+                        newPackage.SaveAs(new FileInfo(newFilePath));
                     }
-                }
-
-                //분할된 파일 생성
-                string formattedDateTime = string.Empty;
-                foreach (var kvp in groups)
-                {
-                    string groupName = kvp.Key;
-                    List<ExcelRange> ranges = kvp.Value;
-
-                    ExcelPackage newExcelPackage = new ExcelPackage();
-                    ExcelWorksheet newWorksheet = newExcelPackage.Workbook.Worksheets.Add(groupName);
-
-                    foreach (var range in ranges)
-                    {
-                        newWorksheet.Cells[range.Start.Row, range.Start.Column].Value = range.Value;
-                    }
-
-                    DateTime now = DateTime.Now;
-                    formattedDateTime = now.ToString("yyMMdd_HHmm");
-
-                    string newFilePath = Path.Combine(Path.GetDirectoryName(sourceFilePath), $"{groupName}_{formattedDateTime}.xlsx");
-                    newExcelPackage.SaveAs(new FileInfo(newFilePath));
                 }
             }
         }
+
+        /// <summary> 문자열을 받아 앞부분 문자(char)만 남겨두고 제거 </summary>
+        /// <param name="inputStr"> 문자열만 남겨두고 자를 문자열(도매처코드) </param>
+        /// <returns> 문자열만 남겨진 문자열 </returns>
+        public string SplitString(string inputStr)
+        {
+            int index = 0;
+            foreach (var tmp in inputStr)
+            {
+                if (!Char.IsLetter(tmp))
+                {
+                    break;
+                }
+                index++; //char가 아닌 문자열의 Index
+            }
+
+            return inputStr.Substring(0, index);
+        }
+
+        /// <summary> columnName과 이름이 일치하는 열의 data들을 Distinct하여 List로 출력한다. </summary>
+        /// <param name="worksheet"></param>
+        /// <param name="columnName"></param>
+        /// <returns> 해당 열의 data를 list로 출력 </returns>
+        private List<string> GetColumnValues(ExcelWorksheet worksheet, int columnIndex, string columnName)
+        {
+            // 해당 열의 첫 번째 행과 마지막 행 인덱스 가져오기
+            int startRow = 2;  // 첫 번째 데이터 행의 인덱스
+            int endRow = worksheet.Dimension.Rows;
+
+            var columnValues = new List<string>();
+
+            // 해당 열의 data들의 범위를 지정
+            var columnRange = worksheet.Cells[startRow, columnIndex, endRow, columnIndex];
+
+            // 해당 범위에서 cell값들을 Distinct처리하여 list(columnValues)에 넣어준다.
+            foreach (var cell in columnRange)
+            {
+                string value = cell.Value?.ToString();
+                if (!string.IsNullOrEmpty(value) && !columnValues.Contains(value))
+                {
+                    columnValues.Add(value);
+                }
+            }
+            return columnValues;
+        }
+
+        /// <summary> 특정 열의 값을 기준으로 행을 가져온다. </summary>
+        /// <param name="worksheet"> 원본 excel sheet </param>
+        /// <param name="columnIndex"> 해당 열의 index </param>
+        /// <param name="value"> distinct된 해당 열의 data </param>
+        /// <returns> value(distinct data)값을 가진 행들을 list로 출력 </returns>
+        private List<int> GetRowsByColumnValue(ExcelWorksheet worksheet, int columnIndex, string value)
+        {
+            // 해당 열의 첫 번째 행과 마지막 행 인덱스 가져오기
+            int startRow = 2;  // 첫 번째 데이터 행의 인덱스
+            int endRow = worksheet.Dimension.Rows;
+
+            var rows = new List<int>();
+
+            // 해당 열을 기준으로 행(row)을 돌며 주어진 distinct data와 일치하면 해당 행 List(row)에 추가
+            var columnRange = worksheet.Cells[startRow, columnIndex, endRow, columnIndex];
+            for (int row = columnRange.Start.Row; row <= columnRange.End.Row; row++)
+            {
+                var cell = worksheet.Cells[row, columnRange.Start.Column];
+                string cellValue = cell.Value?.ToString();
+                if (cellValue == value)
+                {
+                    rows.Add(row); //@@체크 : 여기서 row 전체가 들어간 것이 아닌, row index나 row 정보가 들어간 것은 아닌지? > row index여도 row 복사는 되지 않나?
+                }
+            }
+            return rows;
+        }
+
+        /// <summary> 기존 Worksheet의 특정 row를 새로운 Worksheet에 복사한다 </summary>
+        /// <param name="sourceWorksheet"> 기존 Worksheet </param>
+        /// <param name="destinationWorksheet"> 새로운 Worksheet </param>
+        /// <param name="row"> 특정 row의 Index </param>
+        private void CopyRow(ExcelWorksheet sourceWorksheet, ExcelWorksheet destinationWorksheet, int row)
+        {
+            //@@체크 : destinationWorksheet.Dimension.Rows에서 null 예외처리가 나서 넣어줬는데 뭔가 여기도 확인필요.
+            // 대상 워크시트에 행이 없는 경우, 첫 번째 행을 추가합니다.
+            if (destinationWorksheet.Dimension == null)
+            {
+                // 임시 텍스트를 사용하여 첫 번째 행을 생성합니다.
+                //      이부분은 추후 생성되는 파일의 '머리 행'을 생성하는 부분으로 재활용하면 될듯.
+                destinationWorksheet.Cells["A1"].LoadFromText("Sample Text");
+                //destinationWorksheet.DeleteRow(1); // 임시 텍스트 행을 삭제합니다.
+            }
+
+            var sourceRow = sourceWorksheet.Cells[row, 1, row, sourceWorksheet.Dimension.Columns];
+            var destinationRow = destinationWorksheet.Cells[destinationWorksheet.Dimension.Rows + 1, 1];
+            destinationRow.Copy(sourceRow);
+        }
+
+        #region 판매자 코드 관리 섹션
+        private void btnDelete_Click(object sender, EventArgs e)
+        {
+            EmptyText();
+        }
+
+        /// <summary> UI상에서 도매처 코드등록 그룹에 있는 TEXT들을 초기화한다. </summary>
+        private void EmptyText()
+        {
+            tbCode.Text = string.Empty;
+            tbName.Text = string.Empty;
+            rtbContent.Text = string.Empty;
+        }
+
+        private void btnAdd_Click(object sender, EventArgs e)
+        {
+            //int rowCount = dataGridView.RowCount;
+            int rowIndex = dataGridView.Rows.Add();
+
+            AddRowNumbers();
+            dataGridView.Rows[rowIndex].Cells[1].Value = tbCode.Text;
+            dataGridView.Rows[rowIndex].Cells[2].Value = tbName.Text;
+            dataGridView.Rows[rowIndex].Cells[3].Value = rtbContent.Text;
+            //dataGridView.Rows[rowIndex].Selected = true;
+
+            EmptyText();
+        }
+
+        private void btnRemoveCode_Click(object sender, EventArgs e)
+        {
+            int index = dataGridView.CurrentCell.RowIndex;
+            if (index >= 0)
+            {
+                // 선택된 행 삭제
+                dataGridView.Rows.RemoveAt(index);
+                AddRowNumbers();
+            }
+            else
+            {
+                MessageBox.Show("선택된 셀이 없습니다. 삭제할 행을 클릭하여 주십시오.");
+            }
+        }
+
+        private void AddRowNumbers()
+        {
+            for (int i = 0; i < dataGridView.Rows.Count; i++)
+            {
+                dataGridView.Rows[i].Cells[0].Value = (i + 1).ToString();
+            }
+        }
+
+        private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            ExportDataToTxt(pathCode);
+        }
+
+        /// <summary> DataGridView에 있는 데이터들 텍스트 파일에 저장 </summary>
+        /// <param name="filePath"> .txt </param>
+        private void ExportDataToTxt(string filePath)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            foreach (DataGridViewRow row in dataGridView.Rows)
+            {
+                for (int i = 0; i < dataGridView.Columns.Count; i++)
+                {
+                    if (row.Cells[i].Value != null)
+                    {
+                        sb.Append(row.Cells[i].Value.ToString());
+                    }
+                    if (i < dataGridView.Columns.Count - 1)
+                    {
+                        sb.Append("\t"); // 탭 구분자 사용
+                    }
+                }
+                sb.AppendLine();
+            }
+
+            // .txt 파일에 저장
+            File.WriteAllText(filePath, sb.ToString());
+        }
+        #endregion
     }
 }
