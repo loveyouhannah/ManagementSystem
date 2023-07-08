@@ -95,12 +95,13 @@ namespace ManagementSystem
                     }
                 }
 
-                //해당 열의 값 distinct하여 list(columnValues)에 저장
-                var columnValues = GetColumnValues(worksheet, columnIndex, colName);
+                //해당 열의 값들을 앞 문자열 DISTINCT하여 list(columnValues)에 저장
+                var columnValues = GetColumnValues(worksheet, columnIndex);
 
                 //distinct한 data들을 기준으로 행을 읽고 Copy & New File 생성
                 foreach (var value in columnValues)
                 {
+                    //@@체크 : columnvalue읽어오는거 재체크 필요. 현 시나리오에서 필요한 친구인가?
                     var rows = GetRowsByColumnValue(worksheet, columnIndex, value);
 
                     if (rows.Count > 0)
@@ -108,21 +109,60 @@ namespace ManagementSystem
                         var newPackage = new ExcelPackage();
                         var newWorksheet = newPackage.Workbook.Worksheets.Add("Sheet1");
 
-                        foreach (var row in rows)
+                        //저장된 도매처인 경우
+                        if (CompareCodeData(value))
                         {
-                            CopyRow(worksheet, newWorksheet, row);
+                            //@@체크 : Main View 'Content'의 내용을 구분자(,)로 구별하여 첫번째 행을 채워준다.
+
+                            //@@체크 : 해당 행의 명칭과 비교하여 알맞은 자리에 데이터들을 복사한다.
+
+                        }
+                        else //저장된 도매처가 아닌 경우 행을 그대로 복사한다.
+                        {
+                            foreach (var row in rows)
+                            {
+                                CopyRow(worksheet, newWorksheet, row);
+                            }
                         }
 
-                        //파일 저장
+                        #region 파일 저장
                         DateTime now = DateTime.Now;
                         formattedDateTime = now.ToString("yyMMdd_HHmm");
 
                         string newFilePath = Path.Combine(Path.GetDirectoryName(sourceFilePath), $"{value}_{formattedDateTime}.xlsx");
                         newPackage.SaveAs(new FileInfo(newFilePath));
+                        #endregion
                     }
                 }
             }
         }
+
+
+        /// <summary> columnName과 이름이 일치하는 열의 data들을 Distinct하여 List로 출력한다. </summary>
+        /// <param name="worksheet"></param>
+        /// <returns> 해당 열의 data를 list로 출력 </returns>
+        private List<string> GetColumnValues(ExcelWorksheet worksheet, int columnIndex)
+        {
+            // 해당 열의 첫 번째 행과 마지막 행 인덱스 가져오기
+            int startRow = 2;  // 첫 번째 데이터 행의 인덱스
+            int endRow = worksheet.Dimension.Rows;
+
+            // 해당 열의 data들의 범위를 지정
+            var columnRange = worksheet.Cells[startRow, columnIndex, endRow, columnIndex];
+            
+            // 해당 범위에서 cell값들을 Distinct처리하여 list(columnValues)에 넣어준다.
+            var columnValues = new List<string>();
+            foreach (var cell in columnRange)
+            {
+                string value = SplitString(cell.Value?.ToString());
+                if (!string.IsNullOrEmpty(value) && !columnValues.Contains(value))
+                {
+                    columnValues.Add(value);
+                }
+            }
+            return columnValues;
+        }
+
 
         /// <summary> 문자열을 받아 앞부분 문자(char)만 남겨두고 제거 </summary>
         /// <param name="inputStr"> 문자열만 남겨두고 자를 문자열(도매처코드) </param>
@@ -142,32 +182,27 @@ namespace ManagementSystem
             return inputStr.Substring(0, index);
         }
 
-        /// <summary> columnName과 이름이 일치하는 열의 data들을 Distinct하여 List로 출력한다. </summary>
-        /// <param name="worksheet"></param>
-        /// <param name="columnName"></param>
-        /// <returns> 해당 열의 data를 list로 출력 </returns>
-        private List<string> GetColumnValues(ExcelWorksheet worksheet, int columnIndex, string columnName)
+
+        /// <summary> 통합양식에서 Distinct한 data들이 ManagementSystem안에 저장되어 있는 데이터인지 확인하는 함수 </summary>
+        /// <param name="codeData"> 비교하고자 하는 통합양식의 Distinct data </param>
+        /// <returns> 저장되어 있는 코드일 경우 true를 리턴한다. </returns>
+        private bool CompareCodeData(string codeData)
         {
-            // 해당 열의 첫 번째 행과 마지막 행 인덱스 가져오기
-            int startRow = 2;  // 첫 번째 데이터 행의 인덱스
-            int endRow = worksheet.Dimension.Rows;
+            bool exists = false;
+            string cellValue = string.Empty;
 
-            var columnValues = new List<string>();
-
-            // 해당 열의 data들의 범위를 지정
-            var columnRange = worksheet.Cells[startRow, columnIndex, endRow, columnIndex];
-
-            // 해당 범위에서 cell값들을 Distinct처리하여 list(columnValues)에 넣어준다.
-            foreach (var cell in columnRange)
+            foreach (DataGridViewRow row in dataGridView.Rows)
             {
-                string value = cell.Value?.ToString();
-                if (!string.IsNullOrEmpty(value) && !columnValues.Contains(value))
+                cellValue = row.Cells[1].Value?.ToString();
+                if (cellValue == codeData)
                 {
-                    columnValues.Add(value);
+                    exists = true;
+                    break;
                 }
             }
-            return columnValues;
+            return exists;
         }
+
 
         /// <summary> 특정 열의 값을 기준으로 행을 가져온다. </summary>
         /// <param name="worksheet"> 원본 excel sheet </param>
@@ -196,6 +231,7 @@ namespace ManagementSystem
             return rows;
         }
 
+
         /// <summary> 기존 Worksheet의 특정 row를 새로운 Worksheet에 복사한다 </summary>
         /// <param name="sourceWorksheet"> 기존 Worksheet </param>
         /// <param name="destinationWorksheet"> 새로운 Worksheet </param>
@@ -216,6 +252,7 @@ namespace ManagementSystem
             var destinationRow = destinationWorksheet.Cells[destinationWorksheet.Dimension.Rows + 1, 1];
             destinationRow.Copy(sourceRow);
         }
+
 
         #region 판매자 코드 관리 섹션
         private void btnDelete_Click(object sender, EventArgs e)
