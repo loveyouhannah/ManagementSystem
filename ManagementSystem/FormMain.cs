@@ -7,6 +7,8 @@ using Excel = Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.Excel;
 using System.Xml;
 using System.Text;
+using System.Data.Common;
+using System;
 
 namespace ManagementSystem
 {
@@ -49,6 +51,7 @@ namespace ManagementSystem
         }
         #endregion
 
+        #region Export 섹션 버튼 이벤트
         /// <summary> Whole Data담은 엑셀 파일 주소 불러오기 </summary>
         private void btnSelectFile_Click(object sender, EventArgs e)
         {
@@ -74,6 +77,7 @@ namespace ManagementSystem
         {
             SplitExcelFile(filePath, columnName);
         }
+        #endregion
 
         public void SplitExcelFile(string sourceFilePath, string colName)
         {
@@ -101,7 +105,7 @@ namespace ManagementSystem
                 //distinct한 data들을 기준으로 행을 읽고 Copy & New File 생성
                 foreach (var value in columnValues)
                 {
-                    //@@체크 : columnvalue읽어오는거 재체크 필요. 현 시나리오에서 필요한 친구인가?
+                    //value 값을 가진 행 index들 List로 가져오기
                     var rows = GetRowsByColumnValue(worksheet, columnIndex, value);
 
                     if (rows.Count > 0)
@@ -112,16 +116,58 @@ namespace ManagementSystem
                         //저장된 도매처인 경우
                         if (CompareCodeData(value))
                         {
-                            //@@체크 : Main View 'Content'의 내용을 구분자(,)로 구별하여 첫번째 행을 채워준다.
+                            //Main View 'Content'의 내용을 구분자(,)로 구별하여 첫 행을 채워준다.
+                            string[] cellValues = GetContentByCodeValue(value).Split(',');
+                            for (int i = 0; i < cellValues.Length; i++)
+                            {
+                                newWorksheet.Cells[1, i + 1].Value = cellValues[i];
+                            }
 
-                            //@@체크 : 해당 행의 명칭과 비교하여 알맞은 자리에 데이터들을 복사한다.
+                            // 기존 엑셀 파일의 첫 번째 행과 새 엑셀 파일의 첫 번째 행을 비교하여 자리를 찾는다.
+                            for (int column = 1; column <= worksheet.Dimension.Columns; column++)
+                            {
+                                for (int col = 1; col <= newWorksheet.Dimension.Columns; col++)
+                                {
+                                    string existingCellValue = worksheet.Cells[1, column].Value?.ToString();
+                                    string newCellValue = newWorksheet.Cells[1, col].Value?.ToString();
 
+                                    // 일치하는 데이터가 존재하면 새로운 sheet의 열 기준으로 기존 셀 데이터를 복사합니다.
+                                    if (existingCellValue == newCellValue)
+                                    {
+                                        // 해당 value의 row들을 돌면서 cell 복사
+                                        int count = 2;
+                                        string dataToCopy = string.Empty;
+                                        for (int num = 0; num < rows.Count ; num++) //엑셀은 1부터
+                                        {
+                                            dataToCopy = worksheet.Cells[rows[num], column].Value?.ToString();
+                                            newWorksheet.Cells[count, col].Value = dataToCopy;
+                                            count++;
+                                        }
+                                    }
+                                }
+                            }
                         }
                         else //저장된 도매처가 아닌 경우 행을 그대로 복사한다.
                         {
-                            foreach (var row in rows)
+                            //첫 행(컬럼명) 복사
+                            string dataToCopy = string.Empty;
+                            for (int column = 1; column <= worksheet.Dimension.Columns; column++)
                             {
-                                CopyRow(worksheet, newWorksheet, row);
+                                dataToCopy = worksheet.Cells[1, column].Value?.ToString();
+                                newWorksheet.Cells[1, column].Value = dataToCopy;
+                            }
+
+                            //해당 value값의 rows 복사
+                            for (int column = 1; column <= worksheet.Dimension.Columns; column++)
+                            {
+                                int count = 2;
+                                foreach (var row in rows)
+                                {
+                                    // 해당 value의 row들을 돌면서 cell 복사
+                                    dataToCopy = worksheet.Cells[row, column].Value?.ToString();
+                                    newWorksheet.Cells[count, column].Value = dataToCopy;
+                                    count++;
+                                }
                             }
                         }
 
@@ -204,11 +250,33 @@ namespace ManagementSystem
         }
 
 
-        /// <summary> 특정 열의 값을 기준으로 행을 가져온다. </summary>
+        /// <summary> 판매자 코드명에 맞는 Content열의 내용 불러오기 </summary>
+        /// <param name="value"> 판매자 코드명 </param>
+        /// <returns> 해당 코드 행의 Content열의 내용 </returns>
+        private string GetContentByCodeValue(string value)
+        {
+            string content = string.Empty;
+
+            foreach (DataGridViewRow row in dataGridView.Rows)
+            {
+                string code = row.Cells["colCode"].Value?.ToString();
+
+                if (code == value)
+                {
+                    content = row.Cells["colContent"].Value?.ToString();
+                    break;
+                }
+            }
+
+            return content;
+        }
+
+
+        /// <summary> value값을 가진 행의 index들을 List로 가져온다. </summary>
         /// <param name="worksheet"> 원본 excel sheet </param>
         /// <param name="columnIndex"> 해당 열의 index </param>
         /// <param name="value"> distinct된 해당 열의 data </param>
-        /// <returns> value(distinct data)값을 가진 행들을 list로 출력 </returns>
+        /// <returns> value(distinct data)값에 해당되는 행 index들을 List로 리턴 </returns>
         private List<int> GetRowsByColumnValue(ExcelWorksheet worksheet, int columnIndex, string value)
         {
             // 해당 열의 첫 번째 행과 마지막 행 인덱스 가져오기
@@ -222,37 +290,14 @@ namespace ManagementSystem
             for (int row = columnRange.Start.Row; row <= columnRange.End.Row; row++)
             {
                 var cell = worksheet.Cells[row, columnRange.Start.Column];
-                string cellValue = cell.Value?.ToString();
+                string cellValue = SplitString(cell.Value?.ToString());
                 if (cellValue == value)
                 {
-                    rows.Add(row); //@@체크 : 여기서 row 전체가 들어간 것이 아닌, row index나 row 정보가 들어간 것은 아닌지? > row index여도 row 복사는 되지 않나?
+                    rows.Add(row); //row index들을 list에 add
                 }
             }
             return rows;
         }
-
-
-        /// <summary> 기존 Worksheet의 특정 row를 새로운 Worksheet에 복사한다 </summary>
-        /// <param name="sourceWorksheet"> 기존 Worksheet </param>
-        /// <param name="destinationWorksheet"> 새로운 Worksheet </param>
-        /// <param name="row"> 특정 row의 Index </param>
-        private void CopyRow(ExcelWorksheet sourceWorksheet, ExcelWorksheet destinationWorksheet, int row)
-        {
-            //@@체크 : destinationWorksheet.Dimension.Rows에서 null 예외처리가 나서 넣어줬는데 뭔가 여기도 확인필요.
-            // 대상 워크시트에 행이 없는 경우, 첫 번째 행을 추가합니다.
-            if (destinationWorksheet.Dimension == null)
-            {
-                // 임시 텍스트를 사용하여 첫 번째 행을 생성합니다.
-                //      이부분은 추후 생성되는 파일의 '머리 행'을 생성하는 부분으로 재활용하면 될듯.
-                destinationWorksheet.Cells["A1"].LoadFromText("Sample Text");
-                //destinationWorksheet.DeleteRow(1); // 임시 텍스트 행을 삭제합니다.
-            }
-
-            var sourceRow = sourceWorksheet.Cells[row, 1, row, sourceWorksheet.Dimension.Columns];
-            var destinationRow = destinationWorksheet.Cells[destinationWorksheet.Dimension.Rows + 1, 1];
-            destinationRow.Copy(sourceRow);
-        }
-
 
         #region 판매자 코드 관리 섹션
         private void btnDelete_Click(object sender, EventArgs e)
