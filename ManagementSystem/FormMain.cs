@@ -305,6 +305,7 @@ namespace ManagementSystem
             EmptyText();
         }
 
+
         /// <summary> UI상에서 도매처 코드등록 그룹에 있는 TEXT들을 초기화한다. </summary>
         private void EmptyText()
         {
@@ -312,6 +313,7 @@ namespace ManagementSystem
             tbName.Text = string.Empty;
             rtbContent.Text = string.Empty;
         }
+
 
         private void btnAdd_Click(object sender, EventArgs e)
         {
@@ -326,6 +328,7 @@ namespace ManagementSystem
 
             EmptyText();
         }
+
 
         private void btnRemoveCode_Click(object sender, EventArgs e)
         {
@@ -342,6 +345,7 @@ namespace ManagementSystem
             }
         }
 
+
         private void AddRowNumbers()
         {
             for (int i = 0; i < dataGridView.Rows.Count; i++)
@@ -350,10 +354,12 @@ namespace ManagementSystem
             }
         }
 
+
         private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
         {
             ExportDataToTxt(pathCode);
         }
+
 
         /// <summary> DataGridView에 있는 데이터들 텍스트 파일에 저장 </summary>
         /// <param name="filePath"> .txt </param>
@@ -379,6 +385,38 @@ namespace ManagementSystem
 
             // .txt 파일에 저장
             File.WriteAllText(filePath, sb.ToString());
+        }
+
+
+        /// <summary> RichTextBox에 엑셀 셀 데이터를 붙여넣기하는 함수 </summary>
+        private void PasteExcelDataToRichTextBox()
+        {
+            string clipboardText = Clipboard.GetText();
+
+            if (!string.IsNullOrEmpty(clipboardText))
+            {
+                string[] lines = clipboardText.Split('\n');
+                StringBuilder sb = new StringBuilder();
+
+                foreach (string line in lines)
+                {
+                    string[] cells = line.Split('\t');
+
+                    for (int i = 0; i < cells.Length; i++)
+                    {
+                        sb.Append(cells[i]);
+
+                        if (i < cells.Length - 1)
+                        {
+                            sb.Append(",");
+                        }
+                    }
+
+                    sb.AppendLine();
+                }
+
+                rtbContent.Text = sb.ToString();
+            }
         }
         #endregion
     }
